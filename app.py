@@ -14,7 +14,14 @@ IMGBB_API_KEY = "7f7fe7f1db90ef5142e419f559470c39"
 @st.cache_resource
 def conectar_nube():
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    credenciales = Credentials.from_service_account_file('credenciales.json', scopes=scopes)
+    
+    # Detecta automáticamente si está en Streamlit Cloud (Secrets) o en tu PC (archivo local)
+    if "gcp_service_account" in st.secrets:
+        dict_credenciales = dict(st.secrets["gcp_service_account"])
+        credenciales = Credentials.from_service_account_info(dict_credenciales, scopes=scopes)
+    else:
+        credenciales = Credentials.from_service_account_file('credenciales.json', scopes=scopes)
+        
     cliente_sheets = gspread.authorize(credenciales)
     return cliente_sheets.open("INVENTARIO_PROTEC_LIMPIO")
 
@@ -213,7 +220,6 @@ except Exception as e:
     st.error(f"Error conectando a la nube: {e}")
     st.stop()
 
-# Cabecera limpia y profesional utilizando el tema nativo de Streamlit
 col_logo, col_titulo = st.columns([1, 8])
 with col_logo:
     try:
