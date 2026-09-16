@@ -502,11 +502,21 @@ with tab_inventario:
     st.markdown("### 📊 Inventario Consolidado y Estado de Stock")
     st.write("Vista general del stock por ubicación. Las alertas rojas indican stock crítico (≤ 2) y las verdes indican stock saludable (≥ 3).")
     
+    # --- NUEVOS FILTROS DE BÚSQUEDA ---
+    st.write("---")
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        buscar_inv = st.text_input("🔍 Buscar por nombre (ej. Balanza):", key="buscar_inv")
+    with col_b2:
+        categorias_lista_inv = list(df_productos['Categoría'].dropna().unique()) if not df_productos.empty else []
+        filtro_cat_inv = st.selectbox("📂 Filtrar por Categoría:", ["TODAS"] + categorias_lista_inv, key="filtro_cat_inv")
+    
     col_f1, col_f2 = st.columns(2)
     with col_f1:
         solo_criticos = st.checkbox("🚨 Ver solo stock crítico (Rojos 🔴)")
     with col_f2:
         solo_saludables = st.checkbox("✅ Ver solo stock OK (Verdes 🟢)")
+    st.write("---")
     
     if not df_productos.empty and not df_stock.empty:
         df_completo = pd.merge(df_productos[['ID_Producto', 'Nombre del Producto', 'Categoría']], df_stock, on=['ID_Producto', 'Nombre del Producto'], how='inner')
@@ -527,6 +537,15 @@ with tab_inventario:
                 
         df_completo['Estado'] = df_completo['Stock Total'].apply(obtener_semaforo)
         
+        # 1. Aplicar filtro de texto (búsqueda)
+        if buscar_inv:
+            df_completo = df_completo[df_completo['Nombre del Producto'].str.contains(buscar_inv, case=False, na=False)]
+        
+        # 2. Aplicar filtro de categoría
+        if filtro_cat_inv != "TODAS":
+            df_completo = df_completo[df_completo['Categoría'] == filtro_cat_inv]
+        
+        # 3. Aplicar filtros de estado (crítico/saludable)
         if solo_criticos and not solo_saludables:
             df_completo = df_completo[df_completo['Stock Total'] <= 2]
         elif solo_saludables and not solo_criticos:
