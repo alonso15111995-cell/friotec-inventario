@@ -9,13 +9,43 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="Friotec Industrias - Sistema de Inventario", layout="wide")
 
+# ==========================================
+# SISTEMA DE SEGURIDAD (LOGIN)
+# ==========================================
+def check_password():
+    def password_entered():
+        # Busca la contraseña en los Secrets (si no la encuentra por error, usa '12345' por defecto)
+        clave_correcta = st.secrets.get("password_acceso", "12345")
+        if st.session_state["password"] == clave_correcta:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.markdown("### 🔒 Área Restringida - Friotec Industrias")
+        st.text_input("Por favor, introduce la contraseña de acceso:", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.markdown("### 🔒 Área Restringida - Friotec Industrias")
+        st.text_input("Por favor, introduce la contraseña de acceso:", type="password", on_change=password_entered, key="password")
+        st.error("😕 Contraseña incorrecta. Intenta de nuevo.")
+        return False
+    return True
+
+# Si la contraseña no es correcta, la aplicación se detiene aquí y oculta todo lo demás.
+if not check_password():
+    st.stop()
+
+
+# ==========================================
+# CÓDIGO PRINCIPAL DEL INVENTARIO
+# ==========================================
 IMGBB_API_KEY = "7f7fe7f1db90ef5142e419f559470c39"
 
 @st.cache_resource
 def conectar_nube():
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    
-    # Detecta automáticamente si está en Streamlit Cloud (Secrets) o en tu PC (archivo local)
     if "gcp_service_account" in st.secrets:
         dict_credenciales = dict(st.secrets["gcp_service_account"])
         credenciales = Credentials.from_service_account_info(dict_credenciales, scopes=scopes)
@@ -502,7 +532,6 @@ with tab_inventario:
     st.markdown("### 📊 Inventario Consolidado y Estado de Stock")
     st.write("Vista general del stock por ubicación. Las alertas rojas indican stock crítico (≤ 2) y las verdes indican stock saludable (≥ 3).")
     
-    # --- NUEVOS FILTROS DE BÚSQUEDA ---
     st.write("---")
     col_b1, col_b2 = st.columns(2)
     with col_b1:
@@ -537,15 +566,12 @@ with tab_inventario:
                 
         df_completo['Estado'] = df_completo['Stock Total'].apply(obtener_semaforo)
         
-        # 1. Aplicar filtro de texto (búsqueda)
         if buscar_inv:
             df_completo = df_completo[df_completo['Nombre del Producto'].str.contains(buscar_inv, case=False, na=False)]
         
-        # 2. Aplicar filtro de categoría
         if filtro_cat_inv != "TODAS":
             df_completo = df_completo[df_completo['Categoría'] == filtro_cat_inv]
         
-        # 3. Aplicar filtros de estado (crítico/saludable)
         if solo_criticos and not solo_saludables:
             df_completo = df_completo[df_completo['Stock Total'] <= 2]
         elif solo_saludables and not solo_criticos:
