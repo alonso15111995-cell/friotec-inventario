@@ -14,7 +14,6 @@ st.set_page_config(page_title="Friotec Industrias - Sistema de Inventario", layo
 # ==========================================
 def check_password():
     def password_entered():
-        # Busca la contraseña en los Secrets (si no la encuentra por error, usa '12345' por defecto)
         clave_correcta = st.secrets.get("password_acceso", "12345")
         if st.session_state["password"] == clave_correcta:
             st.session_state["password_correct"] = True
@@ -33,7 +32,6 @@ def check_password():
         return False
     return True
 
-# Si la contraseña no es correcta, la aplicación se detiene aquí y oculta todo lo demás.
 if not check_password():
     st.stop()
 
@@ -467,8 +465,9 @@ with tab_movimientos:
             else:
                 st.success("🔄 Traslado interno entre almacenes o tiendas.")
                 origen_amable = st.selectbox("Ubicación de Origen (Sale de...)", opciones_ubi)
-                opciones_destino = [u for u in opciones_ubi if u != origen_amable]
-                destino_amable = st.selectbox("Ubicación de Destino (Llega a...)", opciones_destino)
+                
+                # CORRECCIÓN AQUÍ: Mostrar todas las opciones siempre para evitar el desfase del formulario
+                destino_amable = st.selectbox("Ubicación de Destino (Llega a...)", opciones_ubi)
                 
                 origen_sel = ubicaciones_map[origen_amable]
                 destino_sel = ubicaciones_map[destino_amable]
@@ -477,6 +476,9 @@ with tab_movimientos:
         if st.form_submit_button("🚀 Registrar Movimiento"):
             if not lista_productos:
                 st.error("Primero debes registrar al menos un producto en la pestaña Productos.")
+            # CORRECCIÓN AQUÍ: Validar que no elijan la misma tienda
+            elif "TRASLADO" in tipo_mov and origen_sel == destino_sel:
+                st.error("⚠️ Error: La ubicación de origen y destino no pueden ser la misma.")
             else:
                 tipo_limpio = "INGRESO" if "INGRESO" in tipo_mov else ("SALIDA" if "SALIDA" in tipo_mov else "TRASLADO")
                 exito, mensaje = registrar_movimiento(tipo_limpio, prod_sel, cantidad, origen_sel, destino_sel, nota_final, fecha_mov)
