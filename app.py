@@ -362,7 +362,7 @@ with tab_productos:
         )
 
 # ==========================================
-# PESTAÑA 2: TIENDAS Y ALMACENES (CON VISOR, ALERTAS ROJO/VERDE)
+# PESTAÑA 2: TIENDAS Y ALMACENES (AHORA CON FILTRO "SOLO STOCK > 0")
 # ==========================================
 with tab_tiendas:
     st.markdown("### 🏪 Gestión y Visor de Ubicaciones")
@@ -432,7 +432,6 @@ with tab_tiendas:
             )
             df_visor[ubi_seleccionada] = pd.to_numeric(df_visor[ubi_seleccionada], errors='coerce').fillna(0).astype(int)
             
-            # Agregamos la columna visual del semáforo para la tienda elegida
             def obtener_semaforo_tienda(stock):
                 if stock <= 2:
                     return "🔴 Crítico (≤2)"
@@ -455,11 +454,8 @@ with tab_tiendas:
                 categorias_lista_tienda = list(df_visor['Categoría'].dropna().unique())
                 filtro_cat_tienda = st.selectbox("📂 Filtrar por Categoría:", ["TODAS"] + categorias_lista_tienda, key="filtro_cat_tienda")
                 
-            col_f1_t, col_f2_t = st.columns(2)
-            with col_f1_t:
-                solo_criticos_t = st.checkbox("🚨 Ver solo stock crítico (Rojos 🔴)", key="criticos_t")
-            with col_f2_t:
-                solo_saludables_t = st.checkbox("✅ Ver solo stock OK (Verdes 🟢)", key="saludables_t")
+            # EL NUEVO FILTRO INTELIGENTE PARA OCULTAR CEROS (Activado por defecto)
+            solo_con_stock = st.checkbox("📦 Mostrar solo lo que tengo en stock (1 o más)", value=True, key="solo_stock_t")
                 
             df_filtrado_tienda = df_visor.copy()
             if buscar_tienda:
@@ -467,15 +463,14 @@ with tab_tiendas:
             if filtro_cat_tienda != "TODAS":
                 df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == filtro_cat_tienda]
                 
-            if solo_criticos_t and not solo_saludables_t:
-                df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Stock Actual'] <= 2]
-            elif solo_saludables_t and not solo_criticos_t:
-                df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Stock Actual'] >= 3]
+            # Aplicamos la limpieza de "ceros"
+            if solo_con_stock:
+                df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Stock Actual'] >= 1]
                 
             categorias_a_mostrar_tienda = df_filtrado_tienda['Categoría'].dropna().unique()
             
             if len(categorias_a_mostrar_tienda) == 0:
-                st.warning("⚠️ No se encontraron productos con esos filtros en esta ubicación.")
+                st.warning("⚠️ No se encontraron productos con stock en esta ubicación.")
                 
             for cat in categorias_a_mostrar_tienda:
                 st.markdown(f"### 🏷️ {cat}")
