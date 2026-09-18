@@ -348,20 +348,17 @@ with tab_productos:
         df_cat = df_filtrado[df_filtrado['Categoría'] == cat].reset_index(drop=True)
         df_mostrar = df_cat.drop(columns=['ID_Producto', 'Categoría', 'Stock_Minimo']).copy()
         
-        # Mantenemos los valores como números para que se alineen a la derecha
-        df_mostrar['Precio Unitario'] = pd.to_numeric(df_mostrar['Precio Unitario'], errors='coerce').fillna(0.0)
-        df_mostrar['Precio Minimo'] = pd.to_numeric(df_mostrar['Precio Minimo'], errors='coerce').fillna(0.0)
+        # Volvemos a la versión de texto plano para que se alinee limpio a la izquierda
+        df_mostrar['Precio Unitario'] = df_mostrar['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
+        df_mostrar['Precio Minimo'] = df_mostrar['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
         df_mostrar['Foto'] = df_mostrar['Foto'].apply(lambda x: x if pd.notna(x) and str(x).startswith("http") else None)
         
-        # Configuramos la columna numéricamente para inyectar el formato S/.
         st.dataframe(
             df_mostrar, 
             use_container_width=True, 
             hide_index=True,
             column_config={
-                "Foto": st.column_config.ImageColumn("📸 Imagen"),
-                "Precio Unitario": st.column_config.NumberColumn("Precio Unitario", format="S/. %.2f"),
-                "Precio Minimo": st.column_config.NumberColumn("Precio Mínimo", format="S/. %.2f")
+                "Foto": st.column_config.ImageColumn("📸 Imagen")
             }
         )
 
@@ -445,9 +442,9 @@ with tab_tiendas:
                     return "🟢 Stock OK (≥3)"
             
             df_visor['Estado'] = df_visor[ubi_seleccionada].apply(obtener_semaforo_tienda)
-            # Mantenemos numérico
-            df_visor['Precio Unitario'] = pd.to_numeric(df_visor['Precio Unitario'], errors='coerce').fillna(0.0)
-            df_visor['Precio Minimo'] = pd.to_numeric(df_visor['Precio Minimo'], errors='coerce').fillna(0.0)
+            # Revertimos a texto plano
+            df_visor['Precio Unitario'] = df_visor['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
+            df_visor['Precio Minimo'] = df_visor['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
             
             df_visor = df_visor.rename(columns={
                 'Nombre del Producto': 'Producto', 
@@ -481,16 +478,8 @@ with tab_tiendas:
                 st.markdown(f"### 🏷️ {cat}")
                 df_cat_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == cat].reset_index(drop=True)
                 df_mostrar_tienda = df_cat_tienda[['Producto', 'Estado', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']]
-                st.dataframe(
-                    df_mostrar_tienda, 
-                    use_container_width=True, 
-                    hide_index=True,
-                    column_config={
-                        "Precio Unitario": st.column_config.NumberColumn("Precio Unitario", format="S/. %.2f"),
-                        "Precio Minimo": st.column_config.NumberColumn("Precio Mínimo", format="S/. %.2f"),
-                        "Stock Actual": st.column_config.NumberColumn("Stock Actual")
-                    }
-                )
+                # Mostramos normal sin configuraciones complejas de números
+                st.dataframe(df_mostrar_tienda, use_container_width=True, hide_index=True)
         else:
             st.info("Aún no hay suficientes datos registrados.")
 
