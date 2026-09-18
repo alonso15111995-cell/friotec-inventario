@@ -356,7 +356,7 @@ with tab_productos:
         )
 
 # ==========================================
-# PESTAÑA 2: TIENDAS Y ALMACENES (AHORA CON VISOR DE STOCK)
+# PESTAÑA 2: TIENDAS Y ALMACENES (INTERFAZ ORIGINAL + STOCK)
 # ==========================================
 with tab_tiendas:
     st.markdown("### 🏪 Gestión y Visor de Ubicaciones")
@@ -367,92 +367,107 @@ with tab_tiendas:
             return fila.iloc[0]['Encargada']
         return ""
 
-    with st.expander("✏️ Editar Encargadas de Tiendas"):
-        st.write("Actualiza los nombres de las encargadas en caso de rotación.")
-        with st.form("form_tiendas"):
-            col_t1, col_t2, col_t3 = st.columns(3)
-            
-            with col_t1:
-                st.info("📍 **Tienda 01**")
-                enc_1 = st.text_input("Encargada actual:", value=get_encargada('T1_Gina'))
-                
-            with col_t2:
-                st.info("📍 **Tienda 02**")
-                enc_2 = st.text_input("Encargada actual:", value=get_encargada('T2_Celianny'))
-                
-            with col_t3:
-                st.info("📍 **Tienda 03**")
-                enc_3 = st.text_input("Encargada actual:", value=get_encargada('T3_San_Jose'))
-                
-            st.write("---")
-            col_a1, col_a2 = st.columns(2)
-            
-            with col_a1:
-                st.warning("📦 **Almacén 01 - Túpac**")
-                st.write("Depósito")
-                
-            with col_a2:
-                st.warning("📦 **Almacén 02 - Collasuyo**")
-                st.write("Depósito")
-                
-            if st.form_submit_button("💾 Guardar Cambios de Personal"):
-                nuevo_data = [
-                    {'Tienda': 'T1_Gina', 'Nombre_Visible': 'Tienda 01', 'Encargada': enc_1},
-                    {'Tienda': 'T2_Celianny', 'Nombre_Visible': 'Tienda 02', 'Encargada': enc_2},
-                    {'Tienda': 'T3_San_Jose', 'Nombre_Visible': 'Tienda 03', 'Encargada': enc_3},
-                ]
-                df_nuevo_config = pd.DataFrame(nuevo_data)
-                guardar_configuracion_tiendas(df_nuevo_config)
-                st.success("¡Personal actualizado correctamente en la nube!")
-                time.sleep(1)
-                st.rerun()
+    if 'visor_tienda' not in st.session_state:
+        st.session_state['visor_tienda'] = None
 
-    # --- NUEVO VISOR DE STOCK POR TIENDA ---
+    # --- 1. BLOQUE VISUAL (LOS 5 RECUADROS) ---
+    col_v1, col_v2, col_v3 = st.columns(3)
+    
+    with col_v1:
+        st.info("📍 **Tienda 01**")
+        st.caption(f"Encargada: {get_encargada('T1_Gina')}")
+        if st.button("📦 Ver Stock Tienda 01", use_container_width=True):
+            st.session_state['visor_tienda'] = 'T1_Gina'
+            
+    with col_v2:
+        st.info("📍 **Tienda 02**")
+        st.caption(f"Encargada: {get_encargada('T2_Celianny')}")
+        if st.button("📦 Ver Stock Tienda 02", use_container_width=True):
+            st.session_state['visor_tienda'] = 'T2_Celianny'
+            
+    with col_v3:
+        st.info("📍 **Tienda 03**")
+        st.caption(f"Encargada: {get_encargada('T3_San_Jose')}")
+        if st.button("📦 Ver Stock Tienda 03", use_container_width=True):
+            st.session_state['visor_tienda'] = 'T3_San_Jose'
+            
     st.write("---")
-    st.markdown("### 📦 Consulta de Stock por Ubicación")
     
-    opciones_visor = {
-        'Tienda 01 (Gina)': 'T1_Gina',
-        'Tienda 02 (Celianny)': 'T2_Celianny',
-        'Tienda 03 (San Jose)': 'T3_San_Jose',
-        'Almacén 01 - Túpac': 'A1_Tupac',
-        'Almacén 02 - Collasuyo': 'A2_Collasuyo'
-    }
-    
-    ubi_seleccionada = st.selectbox("Selecciona la tienda o almacén que deseas revisar:", list(opciones_visor.keys()))
-    col_db = opciones_visor[ubi_seleccionada]
-    
-    if not df_productos.empty and not df_stock.empty:
-        # Cruzamos datos de productos con el stock de la tienda elegida
-        df_visor = pd.merge(
-            df_productos[['ID_Producto', 'Nombre del Producto', 'Categoría', 'Precio Unitario', 'Precio Minimo']], 
-            df_stock[['ID_Producto', col_db]], 
-            on='ID_Producto', 
-            how='inner'
-        )
+    col_v4, col_v5 = st.columns(2)
+    with col_v4:
+        st.warning("📦 **Almacén 01 - Túpac**")
+        st.caption("Depósito Central")
+        if st.button("📦 Ver Stock Túpac", use_container_width=True):
+            st.session_state['visor_tienda'] = 'A1_Tupac'
+            
+    with col_v5:
+        st.warning("📦 **Almacén 02 - Collasuyo**")
+        st.caption("Depósito Secundario")
+        if st.button("📦 Ver Stock Collasuyo", use_container_width=True):
+            st.session_state['visor_tienda'] = 'A2_Collasuyo'
+
+    # --- 2. TABLA DE STOCK (APARECE AL HACER CLIC EN UN BOTÓN) ---
+    if st.session_state['visor_tienda']:
+        st.write("---")
+        nombres_amigables = {
+            'T1_Gina': 'Tienda 01 (Gina)',
+            'T2_Celianny': 'Tienda 02 (Celianny)',
+            'T3_San_Jose': 'Tienda 03 (San Jose)',
+            'A1_Tupac': 'Almacén 01 - Túpac',
+            'A2_Collasuyo': 'Almacén 02 - Collasuyo'
+        }
+        ubi_seleccionada = st.session_state['visor_tienda']
+        st.markdown(f"#### 📊 Inventario Actual en: {nombres_amigables[ubi_seleccionada]}")
         
-        # Formatear números
-        df_visor[col_db] = pd.to_numeric(df_visor[col_db], errors='coerce').fillna(0).astype(int)
-        df_visor['Precio Unitario'] = df_visor['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
-        df_visor['Precio Minimo'] = df_visor['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
+        if not df_productos.empty and not df_stock.empty:
+            df_visor = pd.merge(
+                df_productos[['ID_Producto', 'Nombre del Producto', 'Categoría', 'Precio Unitario', 'Precio Minimo']], 
+                df_stock[['ID_Producto', ubi_seleccionada]], 
+                on='ID_Producto', 
+                how='inner'
+            )
+            df_visor[ubi_seleccionada] = pd.to_numeric(df_visor[ubi_seleccionada], errors='coerce').fillna(0).astype(int)
+            df_visor['Precio Unitario'] = df_visor['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
+            df_visor['Precio Minimo'] = df_visor['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
+            
+            df_visor = df_visor.rename(columns={
+                'Nombre del Producto': 'Producto', 
+                ubi_seleccionada: 'Stock Actual'
+            })
+            df_visor = df_visor.sort_values(by=['Categoría', 'Producto'])
+            
+            st.dataframe(
+                df_visor[['Producto', 'Categoría', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']], 
+                use_container_width=True, 
+                hide_index=True
+            )
+        else:
+            st.info("Aún no hay suficientes datos registrados.")
+
+    # --- 3. FORMULARIO PARA EDITAR NOMBRES (ABAJO, COMO ANTES) ---
+    st.write("---")
+    st.markdown("#### ✏️ Editar Nombres de Encargadas")
+    with st.form("form_tiendas"):
+        col_f1, col_f2, col_f3 = st.columns(3)
         
-        # Renombrar para que se vea estético
-        df_visor = df_visor.rename(columns={
-            'Nombre del Producto': 'Producto',
-            col_db: 'Stock Actual'
-        })
-        
-        # Ordenar alfabéticamente
-        df_visor = df_visor.sort_values(by=['Categoría', 'Producto'])
-        
-        # Mostrar tabla final
-        st.dataframe(
-            df_visor[['Producto', 'Categoría', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']], 
-            use_container_width=True, 
-            hide_index=True
-        )
-    else:
-        st.info("Aún no hay suficientes datos registrados para mostrar el stock.")
+        with col_f1:
+            enc_1 = st.text_input("Tienda 01 - Encargada:", value=get_encargada('T1_Gina'))
+        with col_f2:
+            enc_2 = st.text_input("Tienda 02 - Encargada:", value=get_encargada('T2_Celianny'))
+        with col_f3:
+            enc_3 = st.text_input("Tienda 03 - Encargada:", value=get_encargada('T3_San_Jose'))
+            
+        if st.form_submit_button("💾 Guardar Cambios de Personal"):
+            nuevo_data = [
+                {'Tienda': 'T1_Gina', 'Nombre_Visible': 'Tienda 01', 'Encargada': enc_1},
+                {'Tienda': 'T2_Celianny', 'Nombre_Visible': 'Tienda 02', 'Encargada': enc_2},
+                {'Tienda': 'T3_San_Jose', 'Nombre_Visible': 'Tienda 03', 'Encargada': enc_3},
+            ]
+            df_nuevo_config = pd.DataFrame(nuevo_data)
+            guardar_configuracion_tiendas(df_nuevo_config)
+            st.success("¡Personal actualizado correctamente en la nube!")
+            time.sleep(1)
+            st.rerun()
 
 # ==========================================
 # PESTAÑA 3: MOVIMIENTOS
