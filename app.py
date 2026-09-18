@@ -362,7 +362,7 @@ with tab_productos:
         )
 
 # ==========================================
-# PESTAÑA 2: TIENDAS Y ALMACENES (INTERFAZ ORIGINAL + STOCK AGRUPADO)
+# PESTAÑA 2: TIENDAS Y ALMACENES (CON VISOR, ALERTAS ROJO/VERDE)
 # ==========================================
 with tab_tiendas:
     st.markdown("### 🏪 Gestión y Visor de Ubicaciones")
@@ -431,6 +431,15 @@ with tab_tiendas:
                 how='inner'
             )
             df_visor[ubi_seleccionada] = pd.to_numeric(df_visor[ubi_seleccionada], errors='coerce').fillna(0).astype(int)
+            
+            # Agregamos la columna visual del semáforo para la tienda elegida
+            def obtener_semaforo_tienda(stock):
+                if stock <= 2:
+                    return "🔴 Crítico (≤2)"
+                else:
+                    return "🟢 Stock OK"
+            
+            df_visor['Estado'] = df_visor[ubi_seleccionada].apply(obtener_semaforo_tienda)
             df_visor['Precio Unitario'] = df_visor['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
             df_visor['Precio Minimo'] = df_visor['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
             
@@ -446,11 +455,22 @@ with tab_tiendas:
                 categorias_lista_tienda = list(df_visor['Categoría'].dropna().unique())
                 filtro_cat_tienda = st.selectbox("📂 Filtrar por Categoría:", ["TODAS"] + categorias_lista_tienda, key="filtro_cat_tienda")
                 
+            col_f1_t, col_f2_t = st.columns(2)
+            with col_f1_t:
+                solo_criticos_t = st.checkbox("🚨 Ver solo stock crítico (Rojos 🔴)", key="criticos_t")
+            with col_f2_t:
+                solo_saludables_t = st.checkbox("✅ Ver solo stock OK (Verdes 🟢)", key="saludables_t")
+                
             df_filtrado_tienda = df_visor.copy()
             if buscar_tienda:
                 df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Producto'].str.contains(buscar_tienda, case=False, na=False)]
             if filtro_cat_tienda != "TODAS":
                 df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == filtro_cat_tienda]
+                
+            if solo_criticos_t and not solo_saludables_t:
+                df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Stock Actual'] <= 2]
+            elif solo_saludables_t and not solo_criticos_t:
+                df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Stock Actual'] >= 3]
                 
             categorias_a_mostrar_tienda = df_filtrado_tienda['Categoría'].dropna().unique()
             
@@ -460,7 +480,7 @@ with tab_tiendas:
             for cat in categorias_a_mostrar_tienda:
                 st.markdown(f"### 🏷️ {cat}")
                 df_cat_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == cat].reset_index(drop=True)
-                df_mostrar_tienda = df_cat_tienda[['Producto', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']]
+                df_mostrar_tienda = df_cat_tienda[['Producto', 'Estado', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']]
                 st.dataframe(df_mostrar_tienda, use_container_width=True, hide_index=True)
         else:
             st.info("Aún no hay suficientes datos registrados.")
@@ -490,7 +510,7 @@ with tab_tiendas:
                 st.rerun()
 
 # ==========================================
-# PESTAÑA 3: MOVIMIENTOS (CON NUEVO SISTEMA DE CHECKLIST)
+# PESTAÑA 3: MOVIMIENTOS
 # ==========================================
 with tab_movimientos:
     st.markdown("### 🔄 Registro de Movimientos (Ingresos, Salidas y Traslados)")
@@ -573,7 +593,6 @@ with tab_movimientos:
         st.markdown("### 📜 Historial Organizado por Semanas")
         st.caption("Marca la casilla '🗑️ Borrar' en los movimientos que desees eliminar.")
     with col_h2:
-        # Aquí se colocará dinámicamente el botón rojo si hay elementos seleccionados
         placeholder_boton_borrar = st.empty()
 
     if not df_movimientos.empty:
@@ -589,7 +608,6 @@ with tab_movimientos:
         df_movimientos['Semana_Grupo'] = df_movimientos['Fecha_dt'].apply(obtener_rango_semana)
         df_movimientos = df_movimientos.sort_values(by='Fecha_dt', ascending=False)
         
-        # Preparamos el dataframe para edición
         df_mov_edit = df_movimientos.copy()
         df_mov_edit.insert(0, '🗑️ Borrar', False)
         
@@ -609,11 +627,9 @@ with tab_movimientos:
                     disabled=['Fecha', 'Tipo', 'Producto', 'Cantidad', 'Origen', 'Destino', 'Nota'],
                     key=f"editor_{semana}"
                 )
-                # Recopilamos las fechas de las filas marcadas con True en 'Borrar'
                 seleccionados = edited_df[edited_df['🗑️ Borrar'] == True]['Fecha'].tolist()
                 fechas_globales_a_borrar.extend(seleccionados)
                 
-        # Si hay al menos un movimiento seleccionado, mostramos el botón rojo en la parte superior
         if fechas_globales_a_borrar:
             with placeholder_boton_borrar:
                 if st.button(f"🗑️ Eliminar y Revertir ({len(fechas_globales_a_borrar)})", type="primary", use_container_width=True):
