@@ -348,16 +348,20 @@ with tab_productos:
         df_cat = df_filtrado[df_filtrado['Categoría'] == cat].reset_index(drop=True)
         df_mostrar = df_cat.drop(columns=['ID_Producto', 'Categoría', 'Stock_Minimo']).copy()
         
-        df_mostrar['Precio Unitario'] = df_mostrar['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
-        df_mostrar['Precio Minimo'] = df_mostrar['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
+        # Mantenemos los valores como números para que se alineen a la derecha
+        df_mostrar['Precio Unitario'] = pd.to_numeric(df_mostrar['Precio Unitario'], errors='coerce').fillna(0.0)
+        df_mostrar['Precio Minimo'] = pd.to_numeric(df_mostrar['Precio Minimo'], errors='coerce').fillna(0.0)
         df_mostrar['Foto'] = df_mostrar['Foto'].apply(lambda x: x if pd.notna(x) and str(x).startswith("http") else None)
         
+        # Configuramos la columna numéricamente para inyectar el formato S/.
         st.dataframe(
             df_mostrar, 
             use_container_width=True, 
             hide_index=True,
             column_config={
-                "Foto": st.column_config.ImageColumn("📸 Imagen")
+                "Foto": st.column_config.ImageColumn("📸 Imagen"),
+                "Precio Unitario": st.column_config.NumberColumn("Precio Unitario", format="S/. %.2f"),
+                "Precio Minimo": st.column_config.NumberColumn("Precio Mínimo", format="S/. %.2f")
             }
         )
 
@@ -432,7 +436,6 @@ with tab_tiendas:
             )
             df_visor[ubi_seleccionada] = pd.to_numeric(df_visor[ubi_seleccionada], errors='coerce').fillna(0).astype(int)
             
-            # Nuevo Semáforo de 3 colores para las tiendas
             def obtener_semaforo_tienda(stock):
                 if stock == 0:
                     return "🔴 Agotado (0)"
@@ -442,8 +445,9 @@ with tab_tiendas:
                     return "🟢 Stock OK (≥3)"
             
             df_visor['Estado'] = df_visor[ubi_seleccionada].apply(obtener_semaforo_tienda)
-            df_visor['Precio Unitario'] = df_visor['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
-            df_visor['Precio Minimo'] = df_visor['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
+            # Mantenemos numérico
+            df_visor['Precio Unitario'] = pd.to_numeric(df_visor['Precio Unitario'], errors='coerce').fillna(0.0)
+            df_visor['Precio Minimo'] = pd.to_numeric(df_visor['Precio Minimo'], errors='coerce').fillna(0.0)
             
             df_visor = df_visor.rename(columns={
                 'Nombre del Producto': 'Producto', 
@@ -477,7 +481,16 @@ with tab_tiendas:
                 st.markdown(f"### 🏷️ {cat}")
                 df_cat_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == cat].reset_index(drop=True)
                 df_mostrar_tienda = df_cat_tienda[['Producto', 'Estado', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']]
-                st.dataframe(df_mostrar_tienda, use_container_width=True, hide_index=True)
+                st.dataframe(
+                    df_mostrar_tienda, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Precio Unitario": st.column_config.NumberColumn("Precio Unitario", format="S/. %.2f"),
+                        "Precio Minimo": st.column_config.NumberColumn("Precio Mínimo", format="S/. %.2f"),
+                        "Stock Actual": st.column_config.NumberColumn("Stock Actual")
+                    }
+                )
         else:
             st.info("Aún no hay suficientes datos registrados.")
 
@@ -638,7 +651,7 @@ with tab_movimientos:
         st.info("Aún no hay movimientos registrados.")
 
 # ==========================================
-# PESTAÑA 4: INVENTARIO Y STOCK (NUEVO SEMÁFORO 3 COLORES)
+# PESTAÑA 4: INVENTARIO Y STOCK
 # ==========================================
 with tab_inventario:
     st.markdown("### 📊 Inventario Consolidado y Estado de Stock")
@@ -652,7 +665,6 @@ with tab_inventario:
         categorias_lista_inv = list(df_productos['Categoría'].dropna().unique()) if not df_productos.empty else []
         filtro_cat_inv = st.selectbox("📂 Filtrar por Categoría:", ["TODAS"] + categorias_lista_inv, key="filtro_cat_inv")
     
-    # Nuevos botones de filtrado por los 3 colores
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         solo_agotados = st.checkbox("🚨 Agotados (🔴 0)")
@@ -673,7 +685,6 @@ with tab_inventario:
         
         df_completo['Stock Total'] = df_completo[cols_ubicaciones].sum(axis=1)
         
-        # Nueva regla de 3 colores para el inventario total
         def obtener_semaforo(stock):
             if stock == 0:
                 return "🔴 Agotado (0)"
@@ -690,7 +701,6 @@ with tab_inventario:
         if filtro_cat_inv != "TODAS":
             df_completo = df_completo[df_completo['Categoría'] == filtro_cat_inv]
         
-        # Filtro compuesto para que puedas marcar varias casillas a la vez
         if solo_agotados or solo_precaucion or solo_saludables:
             mask = pd.Series(False, index=df_completo.index)
             if solo_agotados:
