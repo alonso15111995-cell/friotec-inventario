@@ -356,7 +356,7 @@ with tab_productos:
         )
 
 # ==========================================
-# PESTAÑA 2: TIENDAS Y ALMACENES (INTERFAZ ORIGINAL + STOCK)
+# PESTAÑA 2: TIENDAS Y ALMACENES (INTERFAZ ORIGINAL + STOCK AGRUPADO)
 # ==========================================
 with tab_tiendas:
     st.markdown("### 🏪 Gestión y Visor de Ubicaciones")
@@ -406,7 +406,7 @@ with tab_tiendas:
         if st.button("📦 Ver Stock Collasuyo", use_container_width=True):
             st.session_state['visor_tienda'] = 'A2_Collasuyo'
 
-    # --- 2. TABLA DE STOCK (APARECE AL HACER CLIC EN UN BOTÓN) ---
+    # --- 2. TABLA DE STOCK CON FILTROS Y CATEGORÍAS ---
     if st.session_state['visor_tienda']:
         st.write("---")
         nombres_amigables = {
@@ -434,40 +434,58 @@ with tab_tiendas:
                 'Nombre del Producto': 'Producto', 
                 ubi_seleccionada: 'Stock Actual'
             })
-            df_visor = df_visor.sort_values(by=['Categoría', 'Producto'])
             
-            st.dataframe(
-                df_visor[['Producto', 'Categoría', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']], 
-                use_container_width=True, 
-                hide_index=True
-            )
+            # Filtros para esta tienda
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                buscar_tienda = st.text_input("🔍 Buscar producto en esta ubicación:", key="buscar_tienda")
+            with col_b2:
+                categorias_lista_tienda = list(df_visor['Categoría'].dropna().unique())
+                filtro_cat_tienda = st.selectbox("📂 Filtrar por Categoría:", ["TODAS"] + categorias_lista_tienda, key="filtro_cat_tienda")
+                
+            df_filtrado_tienda = df_visor.copy()
+            if buscar_tienda:
+                df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Producto'].str.contains(buscar_tienda, case=False, na=False)]
+            if filtro_cat_tienda != "TODAS":
+                df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == filtro_cat_tienda]
+                
+            categorias_a_mostrar_tienda = df_filtrado_tienda['Categoría'].dropna().unique()
+            
+            if len(categorias_a_mostrar_tienda) == 0:
+                st.warning("⚠️ No se encontraron productos con esos filtros en esta ubicación.")
+                
+            for cat in categorias_a_mostrar_tienda:
+                st.markdown(f"### 🏷️ {cat}")
+                df_cat_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == cat].reset_index(drop=True)
+                df_mostrar_tienda = df_cat_tienda[['Producto', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']]
+                st.dataframe(df_mostrar_tienda, use_container_width=True, hide_index=True)
         else:
             st.info("Aún no hay suficientes datos registrados.")
 
-    # --- 3. FORMULARIO PARA EDITAR NOMBRES (ABAJO, COMO ANTES) ---
+    # --- 3. FORMULARIO PARA EDITAR NOMBRES ---
     st.write("---")
-    st.markdown("#### ✏️ Editar Nombres de Encargadas")
-    with st.form("form_tiendas"):
-        col_f1, col_f2, col_f3 = st.columns(3)
-        
-        with col_f1:
-            enc_1 = st.text_input("Tienda 01 - Encargada:", value=get_encargada('T1_Gina'))
-        with col_f2:
-            enc_2 = st.text_input("Tienda 02 - Encargada:", value=get_encargada('T2_Celianny'))
-        with col_f3:
-            enc_3 = st.text_input("Tienda 03 - Encargada:", value=get_encargada('T3_San_Jose'))
+    with st.expander("✏️ Editar Nombres de Encargadas"):
+        with st.form("form_tiendas"):
+            col_f1, col_f2, col_f3 = st.columns(3)
             
-        if st.form_submit_button("💾 Guardar Cambios de Personal"):
-            nuevo_data = [
-                {'Tienda': 'T1_Gina', 'Nombre_Visible': 'Tienda 01', 'Encargada': enc_1},
-                {'Tienda': 'T2_Celianny', 'Nombre_Visible': 'Tienda 02', 'Encargada': enc_2},
-                {'Tienda': 'T3_San_Jose', 'Nombre_Visible': 'Tienda 03', 'Encargada': enc_3},
-            ]
-            df_nuevo_config = pd.DataFrame(nuevo_data)
-            guardar_configuracion_tiendas(df_nuevo_config)
-            st.success("¡Personal actualizado correctamente en la nube!")
-            time.sleep(1)
-            st.rerun()
+            with col_f1:
+                enc_1 = st.text_input("Tienda 01 - Encargada:", value=get_encargada('T1_Gina'))
+            with col_f2:
+                enc_2 = st.text_input("Tienda 02 - Encargada:", value=get_encargada('T2_Celianny'))
+            with col_f3:
+                enc_3 = st.text_input("Tienda 03 - Encargada:", value=get_encargada('T3_San_Jose'))
+                
+            if st.form_submit_button("💾 Guardar Cambios de Personal"):
+                nuevo_data = [
+                    {'Tienda': 'T1_Gina', 'Nombre_Visible': 'Tienda 01', 'Encargada': enc_1},
+                    {'Tienda': 'T2_Celianny', 'Nombre_Visible': 'Tienda 02', 'Encargada': enc_2},
+                    {'Tienda': 'T3_San_Jose', 'Nombre_Visible': 'Tienda 03', 'Encargada': enc_3},
+                ]
+                df_nuevo_config = pd.DataFrame(nuevo_data)
+                guardar_configuracion_tiendas(df_nuevo_config)
+                st.success("¡Personal actualizado correctamente en la nube!")
+                time.sleep(1)
+                st.rerun()
 
 # ==========================================
 # PESTAÑA 3: MOVIMIENTOS
