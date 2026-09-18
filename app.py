@@ -209,36 +209,42 @@ def registrar_movimiento(tipo, producto_nombre, cantidad, origen, destino, nota,
     sincronizar_nube_completa(df_prod, df_stock, df_mov)
     return True, "¡Movimiento registrado con éxito!"
 
-def anular_ultimo_movimiento():
+def eliminar_movimientos(lista_fechas_eliminar):
     df_prod, df_stock, df_mov, _ = cargar_datos()
-    if df_mov.empty:
-        return False, "No hay movimientos para anular."
     
-    ultimo = df_mov.iloc[-1]
-    tipo = ultimo['Tipo']
-    id_prod = str(ultimo['ID_Producto'])
-    cantidad = int(ultimo['Cantidad'])
-    origen = ultimo['Origen']
-    destino = ultimo['Destino']
-    
-    idx_stock_list = df_stock.index[df_stock['ID_Producto'] == id_prod].tolist()
-    if idx_stock_list:
-        idx_stock = idx_stock_list[0]
-        if tipo == "INGRESO":
-            actual = int(df_stock.at[idx_stock, destino] or 0)
-            df_stock.at[idx_stock, destino] = max(0, actual - cantidad)
-        elif tipo == "SALIDA":
-            actual = int(df_stock.at[idx_stock, origen] or 0)
-            df_stock.at[idx_stock, origen] = actual + cantidad
-        elif tipo == "TRASLADO":
-            actual_origen = int(df_stock.at[idx_stock, origen] or 0)
-            actual_destino = int(df_stock.at[idx_stock, destino] or 0)
-            df_stock.at[idx_stock, origen] = actual_origen + cantidad
-            df_stock.at[idx_stock, destino] = max(0, actual_destino - cantidad)
-            
-    df_mov = df_mov.iloc[:-1].reset_index(drop=True)
+    for fecha_mov in lista_fechas_eliminar:
+        row_idx_list = df_mov.index[df_mov['Fecha'] == fecha_mov].tolist()
+        if not row_idx_list:
+            continue
+        idx_mov = row_idx_list[0]
+        fila = df_mov.loc[idx_mov]
+        
+        tipo = fila['Tipo']
+        id_prod = str(fila['ID_Producto'])
+        cantidad = int(fila['Cantidad'])
+        origen = fila['Origen']
+        destino = fila['Destino']
+        
+        idx_stock_list = df_stock.index[df_stock['ID_Producto'] == id_prod].tolist()
+        if idx_stock_list:
+            idx_stock = idx_stock_list[0]
+            if tipo == "INGRESO":
+                actual = int(df_stock.at[idx_stock, destino] or 0)
+                df_stock.at[idx_stock, destino] = max(0, actual - cantidad)
+            elif tipo == "SALIDA":
+                actual = int(df_stock.at[idx_stock, origen] or 0)
+                df_stock.at[idx_stock, origen] = actual + cantidad
+            elif tipo == "TRASLADO":
+                actual_origen = int(df_stock.at[idx_stock, origen] or 0)
+                actual_destino = int(df_stock.at[idx_stock, destino] or 0)
+                df_stock.at[idx_stock, origen] = actual_origen + cantidad
+                df_stock.at[idx_stock, destino] = max(0, actual_destino - cantidad)
+                
+        df_mov = df_mov.drop(idx_mov)
+        
+    df_mov = df_mov.reset_index(drop=True)
     sincronizar_nube_completa(df_prod, df_stock, df_mov)
-    return True, "¡Último movimiento anulado y stock revertido con éxito!"
+    return True, "¡Movimientos seleccionados eliminados y stock revertido con éxito!"
 
 
 # --- CARGA DE DATOS Y CABECERA ---
@@ -370,7 +376,6 @@ with tab_tiendas:
     if 'visor_tienda' not in st.session_state:
         st.session_state['visor_tienda'] = None
 
-    # --- 1. BLOQUE VISUAL (LOS 5 RECUADROS) ---
     col_v1, col_v2, col_v3 = st.columns(3)
     
     with col_v1:
@@ -406,7 +411,6 @@ with tab_tiendas:
         if st.button("📦 Ver Stock Collasuyo", use_container_width=True):
             st.session_state['visor_tienda'] = 'A2_Collasuyo'
 
-    # --- 2. TABLA DE STOCK CON FILTROS Y CATEGORÍAS ---
     if st.session_state['visor_tienda']:
         st.write("---")
         nombres_amigables = {
@@ -435,7 +439,6 @@ with tab_tiendas:
                 ubi_seleccionada: 'Stock Actual'
             })
             
-            # Filtros para esta tienda
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 buscar_tienda = st.text_input("🔍 Buscar producto en esta ubicación:", key="buscar_tienda")
@@ -462,7 +465,6 @@ with tab_tiendas:
         else:
             st.info("Aún no hay suficientes datos registrados.")
 
-    # --- 3. FORMULARIO PARA EDITAR NOMBRES ---
     st.write("---")
     with st.expander("✏️ Editar Nombres de Encargadas"):
         with st.form("form_tiendas"):
@@ -488,7 +490,7 @@ with tab_tiendas:
                 st.rerun()
 
 # ==========================================
-# PESTAÑA 3: MOVIMIENTOS
+# PESTAÑA 3: MOVIMIENTOS (CON NUEVO SISTEMA DE CHECKLIST)
 # ==========================================
 with tab_movimientos:
     st.markdown("### 🔄 Registro de Movimientos (Ingresos, Salidas y Traslados)")
@@ -566,18 +568,13 @@ with tab_movimientos:
 
     st.write("---")
     
-    col_h1, col_h2 = st.columns([3, 1])
+    col_h1, col_h2 = st.columns([2, 1])
     with col_h1:
         st.markdown("### 📜 Historial Organizado por Semanas")
+        st.caption("Marca la casilla '🗑️ Borrar' en los movimientos que desees eliminar.")
     with col_h2:
-        if st.button("⚠️ Anular Último Movimiento", type="secondary"):
-            exito, mensaje = anular_ultimo_movimiento()
-            if exito:
-                st.success(mensaje)
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.warning(mensaje)
+        # Aquí se colocará dinámicamente el botón rojo si hay elementos seleccionados
+        placeholder_boton_borrar = st.empty()
 
     if not df_movimientos.empty:
         df_movimientos['Fecha_dt'] = pd.to_datetime(df_movimientos['Fecha'], errors='coerce')
@@ -591,14 +588,40 @@ with tab_movimientos:
 
         df_movimientos['Semana_Grupo'] = df_movimientos['Fecha_dt'].apply(obtener_rango_semana)
         df_movimientos = df_movimientos.sort_values(by='Fecha_dt', ascending=False)
-        semanas_unicas = df_movimientos['Semana_Grupo'].dropna().unique()
+        
+        # Preparamos el dataframe para edición
+        df_mov_edit = df_movimientos.copy()
+        df_mov_edit.insert(0, '🗑️ Borrar', False)
+        
+        semanas_unicas = df_mov_edit['Semana_Grupo'].dropna().unique()
+        fechas_globales_a_borrar = []
+        cols_to_show = ['🗑️ Borrar', 'Fecha', 'Tipo', 'Producto', 'Cantidad', 'Origen', 'Destino', 'Nota']
         
         for idx, semana in enumerate(semanas_unicas):
-            df_semana = df_movimientos[df_movimientos['Semana_Grupo'] == semana].drop(columns=['Fecha_dt', 'Semana_Grupo'])
+            df_semana = df_mov_edit[df_mov_edit['Semana_Grupo'] == semana]
             abierto_por_defecto = (idx == 0)
             
             with st.expander(f"📅 {semana} ({len(df_semana)} movimientos)", expanded=abierto_por_defecto):
-                st.dataframe(df_semana, use_container_width=True, hide_index=True)
+                edited_df = st.data_editor(
+                    df_semana[cols_to_show],
+                    hide_index=True,
+                    use_container_width=True,
+                    disabled=['Fecha', 'Tipo', 'Producto', 'Cantidad', 'Origen', 'Destino', 'Nota'],
+                    key=f"editor_{semana}"
+                )
+                # Recopilamos las fechas de las filas marcadas con True en 'Borrar'
+                seleccionados = edited_df[edited_df['🗑️ Borrar'] == True]['Fecha'].tolist()
+                fechas_globales_a_borrar.extend(seleccionados)
+                
+        # Si hay al menos un movimiento seleccionado, mostramos el botón rojo en la parte superior
+        if fechas_globales_a_borrar:
+            with placeholder_boton_borrar:
+                if st.button(f"🗑️ Eliminar y Revertir ({len(fechas_globales_a_borrar)})", type="primary", use_container_width=True):
+                    exito, msg = eliminar_movimientos(fechas_globales_a_borrar)
+                    if exito:
+                        st.success(msg)
+                        time.sleep(1)
+                        st.rerun()
     else:
         st.info("Aún no hay movimientos registrados.")
 
