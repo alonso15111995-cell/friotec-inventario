@@ -53,7 +53,6 @@ def conectar_nube():
     cliente_sheets = gspread.authorize(credenciales)
     return cliente_sheets.open("INVENTARIO_PROTEC_LIMPIO")
 
-# AQUI ESTÁ EL CAMBIO DE SEGURIDAD: ttl=60 (Actualiza cada 60 seg en lugar de 5)
 @st.cache_data(ttl=60)
 def cargar_datos():
     hoja = conectar_nube()
@@ -363,7 +362,7 @@ with tab_productos:
         )
 
 # ==========================================
-# PESTAÑA 2: TIENDAS Y ALMACENES
+# PESTAÑA 2: TIENDAS Y ALMACENES 
 # ==========================================
 with tab_tiendas:
     st.markdown("### 🏪 Gestión y Visor de Ubicaciones")
@@ -433,11 +432,14 @@ with tab_tiendas:
             )
             df_visor[ubi_seleccionada] = pd.to_numeric(df_visor[ubi_seleccionada], errors='coerce').fillna(0).astype(int)
             
+            # Nuevo Semáforo de 3 colores para las tiendas
             def obtener_semaforo_tienda(stock):
-                if stock <= 2:
-                    return "🔴 Crítico (≤2)"
+                if stock == 0:
+                    return "🔴 Agotado (0)"
+                elif 1 <= stock <= 2:
+                    return "🟡 Precaución (1-2)"
                 else:
-                    return "🟢 Stock OK"
+                    return "🟢 Stock OK (≥3)"
             
             df_visor['Estado'] = df_visor[ubi_seleccionada].apply(obtener_semaforo_tienda)
             df_visor['Precio Unitario'] = df_visor['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
@@ -636,11 +638,11 @@ with tab_movimientos:
         st.info("Aún no hay movimientos registrados.")
 
 # ==========================================
-# PESTAÑA 4: INVENTARIO Y STOCK
+# PESTAÑA 4: INVENTARIO Y STOCK (NUEVO SEMÁFORO 3 COLORES)
 # ==========================================
 with tab_inventario:
     st.markdown("### 📊 Inventario Consolidado y Estado de Stock")
-    st.write("Vista general del stock por ubicación. Las alertas rojas indican stock crítico (≤ 2) y las verdes indican stock saludable (≥ 3).")
+    st.write("Vista general del stock global. Las alertas rojas indican stock agotado (0), las amarillas stock de precaución (1-2), y las verdes stock saludable (≥ 3).")
     
     st.write("---")
     col_b1, col_b2 = st.columns(2)
@@ -650,11 +652,14 @@ with tab_inventario:
         categorias_lista_inv = list(df_productos['Categoría'].dropna().unique()) if not df_productos.empty else []
         filtro_cat_inv = st.selectbox("📂 Filtrar por Categoría:", ["TODAS"] + categorias_lista_inv, key="filtro_cat_inv")
     
-    col_f1, col_f2 = st.columns(2)
+    # Nuevos botones de filtrado por los 3 colores
+    col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        solo_criticos = st.checkbox("🚨 Ver solo stock crítico (Rojos 🔴)")
+        solo_agotados = st.checkbox("🚨 Agotados (🔴 0)")
     with col_f2:
-        solo_saludables = st.checkbox("✅ Ver solo stock OK (Verdes 🟢)")
+        solo_precaucion = st.checkbox("⚠️ Precaución (🟡 1-2)")
+    with col_f3:
+        solo_saludables = st.checkbox("✅ Stock OK (🟢 ≥3)")
     st.write("---")
     
     if not df_productos.empty and not df_stock.empty:
@@ -668,11 +673,14 @@ with tab_inventario:
         
         df_completo['Stock Total'] = df_completo[cols_ubicaciones].sum(axis=1)
         
+        # Nueva regla de 3 colores para el inventario total
         def obtener_semaforo(stock):
-            if stock <= 2:
-                return "🔴 Crítico (≤2)"
+            if stock == 0:
+                return "🔴 Agotado (0)"
+            elif 1 <= stock <= 2:
+                return "🟡 Precaución (1-2)"
             else:
-                return "🟢 Stock OK"
+                return "🟢 Stock OK (≥3)"
                 
         df_completo['Estado'] = df_completo['Stock Total'].apply(obtener_semaforo)
         
@@ -682,12 +690,16 @@ with tab_inventario:
         if filtro_cat_inv != "TODAS":
             df_completo = df_completo[df_completo['Categoría'] == filtro_cat_inv]
         
-        if solo_criticos and not solo_saludables:
-            df_completo = df_completo[df_completo['Stock Total'] <= 2]
-        elif solo_saludables and not solo_criticos:
-            df_completo = df_completo[df_completo['Stock Total'] >= 3]
-        elif solo_criticos and solo_saludables:
-            pass
+        # Filtro compuesto para que puedas marcar varias casillas a la vez
+        if solo_agotados or solo_precaucion or solo_saludables:
+            mask = pd.Series(False, index=df_completo.index)
+            if solo_agotados:
+                mask = mask | (df_completo['Stock Total'] == 0)
+            if solo_precaucion:
+                mask = mask | ((df_completo['Stock Total'] >= 1) & (df_completo['Stock Total'] <= 2))
+            if solo_saludables:
+                mask = mask | (df_completo['Stock Total'] >= 3)
+            df_completo = df_completo[mask]
         
         renombres_columnas = {
             'Nombre del Producto': 'Producto',
