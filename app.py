@@ -53,7 +53,8 @@ def conectar_nube():
     cliente_sheets = gspread.authorize(credenciales)
     return cliente_sheets.open("INVENTARIO_PROTEC_LIMPIO")
 
-@st.cache_data(ttl=5)
+# AQUI ESTÁ EL CAMBIO DE SEGURIDAD: ttl=60 (Actualiza cada 60 seg en lugar de 5)
+@st.cache_data(ttl=60)
 def cargar_datos():
     hoja = conectar_nube()
     df_prod = pd.DataFrame(hoja.worksheet('Productos').get_all_records())
@@ -362,7 +363,7 @@ with tab_productos:
         )
 
 # ==========================================
-# PESTAÑA 2: TIENDAS Y ALMACENES (AHORA CON FILTRO "SOLO STOCK > 0")
+# PESTAÑA 2: TIENDAS Y ALMACENES
 # ==========================================
 with tab_tiendas:
     st.markdown("### 🏪 Gestión y Visor de Ubicaciones")
@@ -454,7 +455,6 @@ with tab_tiendas:
                 categorias_lista_tienda = list(df_visor['Categoría'].dropna().unique())
                 filtro_cat_tienda = st.selectbox("📂 Filtrar por Categoría:", ["TODAS"] + categorias_lista_tienda, key="filtro_cat_tienda")
                 
-            # EL NUEVO FILTRO INTELIGENTE PARA OCULTAR CEROS (Activado por defecto)
             solo_con_stock = st.checkbox("📦 Mostrar solo lo que tengo en stock (1 o más)", value=True, key="solo_stock_t")
                 
             df_filtrado_tienda = df_visor.copy()
@@ -463,7 +463,6 @@ with tab_tiendas:
             if filtro_cat_tienda != "TODAS":
                 df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == filtro_cat_tienda]
                 
-            # Aplicamos la limpieza de "ceros"
             if solo_con_stock:
                 df_filtrado_tienda = df_filtrado_tienda[df_filtrado_tienda['Stock Actual'] >= 1]
                 
