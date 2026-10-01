@@ -4,7 +4,7 @@ import time
 import base64
 import requests
 import gspread
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="Friotec Industrias - Sistema de Inventario", layout="wide")
@@ -164,6 +164,21 @@ def actualizar_producto(id_prod, nuevo_nombre, nueva_categoria, nuevo_p_unitario
     df_prod = df_prod.sort_values(by=['Categoría', 'Nombre del Producto'])
     sincronizar_nube_completa(df_prod, df_stock, df_mov)
 
+def eliminar_producto_bd(nombre_producto):
+    df_prod, df_stock, df_mov, _ = cargar_datos()
+    
+    prod_row = df_prod[df_prod['Nombre del Producto'] == nombre_producto]
+    if prod_row.empty:
+        return False, "Producto no encontrado."
+        
+    id_prod = prod_row.iloc[0]['ID_Producto']
+    
+    df_prod = df_prod[df_prod['ID_Producto'] != id_prod].reset_index(drop=True)
+    df_stock = df_stock[df_stock['ID_Producto'] != id_prod].reset_index(drop=True)
+    
+    sincronizar_nube_completa(df_prod, df_stock, df_mov)
+    return True, "¡Producto eliminado con éxito!"
+
 def registrar_movimiento(tipo, producto_nombre, cantidad, origen, destino, nota, fecha_personalizada):
     df_prod, df_stock, df_mov, _ = cargar_datos()
     
@@ -175,7 +190,11 @@ def registrar_movimiento(tipo, producto_nombre, cantidad, origen, destino, nota,
     idx_stock = df_stock.index[df_stock['ID_Producto'] == id_prod].tolist()[0]
     
     cantidad = int(cantidad)
-    hora_actual = datetime.now().strftime("%H:%M:%S")
+    
+    # AQUI CONFIGURAMOS LA HORA EXACTA DE PERÚ (UTC-5)
+    tz_peru = timezone(timedelta(hours=-5))
+    hora_actual = datetime.now(tz_peru).strftime("%H:%M:%S")
+    
     fecha_final_str = f"{fecha_personalizada.strftime('%Y-%m-%d')} {hora_actual}"
     
     if tipo == "INGRESO":
@@ -295,6 +314,8 @@ with tab_productos:
                 if st.form_submit_button("Guardar en la Nube"):
                     if not n_nombre.strip() or not n_cat_final.strip():
                         st.error("Nombre y Categoría son obligatorios.")
+                    elif not df_productos.empty and n_nombre.strip().lower() in df_productos['Nombre del Producto'].str.strip().str.lower().tolist():
+                        st.error(f"⚠️ Error: El producto '{n_nombre.strip()}' ya existe. Por favor, usa otro nombre o edita el existente.")
                     else:
                         st.info("Subiendo imagen y datos... ⏳")
                         guardar_nuevo_producto(n_nombre, n_cat_final, n_p_uni, n_p_min, n_foto)
@@ -303,7 +324,7 @@ with tab_productos:
                         st.rerun()
 
     with col_edit:
-        with st.expander("✏️ Editar Producto / Cambiar o Quitar Foto"):
+        with st.expander("✏️ Editar Producto / Cambiar Foto"):
             prod_buscar = st.selectbox("Selecciona un producto para editar:", ["(Elige uno)"] + df_productos['Nombre del Producto'].tolist())
             if prod_buscar != "(Elige uno)":
                 d_prod = df_productos[df_productos['Nombre del Producto'] == prod_buscar].iloc[0]
@@ -331,6 +352,24 @@ with tab_productos:
                         st.success("¡Actualizado con éxito!")
                         time.sleep(1)
                         st.rerun()
+                        
+        with st.expander("🗑️ Eliminar Producto"):
+            prod_eliminar = st.selectbox("Selecciona el producto que deseas eliminar:", ["(Elige uno)"] + df_productos['Nombre del Producto'].tolist(), key="sel_eliminar")
+            if prod_eliminar != "(Elige uno)":
+                st.warning(f"Vas a eliminar permanentemente **{prod_eliminar}** de todas las ubicaciones.")
+                st.caption("Nota: Se eliminará del catálogo y del stock de las tiendas. El historial de movimientos pasados se conservará.")
+                confirmacion = st.checkbox("Confirmo que deseo eliminar este producto.")
+                
+                if st.button("🚨 Eliminar Definitivamente", type="primary"):
+                    if confirmacion:
+                        st.info("Eliminando de la base de datos... ⏳")
+                        exito, msg = eliminar_producto_bd(prod_eliminar)
+                        if exito:
+                            st.success(msg)
+                            time.sleep(1)
+                            st.rerun()
+                    else:
+                        st.error("Debes marcar la casilla de confirmación para poder eliminar.")
 
     st.write("---")
     
@@ -348,17 +387,17 @@ with tab_productos:
         df_cat = df_filtrado[df_filtrado['Categoría'] == cat].reset_index(drop=True)
         df_mostrar = df_cat.drop(columns=['ID_Producto', 'Categoría', 'Stock_Minimo']).copy()
         
-        # Volvemos a la versión de texto plano para que se alinee limpio a la izquierda
         df_mostrar['Precio Unitario'] = df_mostrar['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
         df_mostrar['Precio Minimo'] = df_mostrar['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
         df_mostrar['Foto'] = df_mostrar['Foto'].apply(lambda x: x if pd.notna(x) and str(x).startswith("http") else None)
         
         st.dataframe(
             df_mostrar, 
-            use_container_width=True, 
+            use_container_width=False, 
             hide_index=True,
             column_config={
-                "Foto": st.column_config.ImageColumn("📸 Imagen")
+                "Foto": st.column_config.ImageColumn("📸 Imagen"),
+                "Nombre del Producto": st.column_config.TextColumn("Nombre del Producto", width="medium")
             }
         )
 
@@ -442,7 +481,6 @@ with tab_tiendas:
                     return "🟢 Stock OK (≥3)"
             
             df_visor['Estado'] = df_visor[ubi_seleccionada].apply(obtener_semaforo_tienda)
-            # Revertimos a texto plano
             df_visor['Precio Unitario'] = df_visor['Precio Unitario'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
             df_visor['Precio Minimo'] = df_visor['Precio Minimo'].apply(lambda x: f"S/. {float(x or 0):,.2f}")
             
@@ -478,8 +516,14 @@ with tab_tiendas:
                 st.markdown(f"### 🏷️ {cat}")
                 df_cat_tienda = df_filtrado_tienda[df_filtrado_tienda['Categoría'] == cat].reset_index(drop=True)
                 df_mostrar_tienda = df_cat_tienda[['Producto', 'Estado', 'Precio Unitario', 'Precio Minimo', 'Stock Actual']]
-                # Mostramos normal sin configuraciones complejas de números
-                st.dataframe(df_mostrar_tienda, use_container_width=True, hide_index=True)
+                st.dataframe(
+                    df_mostrar_tienda, 
+                    use_container_width=False, 
+                    hide_index=True,
+                    column_config={
+                        "Producto": st.column_config.TextColumn("Producto", width="medium")
+                    }
+                )
         else:
             st.info("Aún no hay suficientes datos registrados.")
 
@@ -589,7 +633,7 @@ with tab_movimientos:
     col_h1, col_h2 = st.columns([2, 1])
     with col_h1:
         st.markdown("### 📜 Historial Organizado por Semanas")
-        st.caption("Marca la casilla '🗑️ Borrar' en los movimientos que desees eliminar.")
+        st.caption("Marca la casilla '🗑️️ Borrar' en los movimientos que desees eliminar.")
     with col_h2:
         placeholder_boton_borrar = st.empty()
 
@@ -621,7 +665,11 @@ with tab_movimientos:
                 edited_df = st.data_editor(
                     df_semana[cols_to_show],
                     hide_index=True,
-                    use_container_width=True,
+                    use_container_width=False,
+                    column_config={
+                        "Producto": st.column_config.TextColumn("Producto", width="medium"),
+                        "Nota": st.column_config.TextColumn("Nota", width="large")
+                    },
                     disabled=['Fecha', 'Tipo', 'Producto', 'Cantidad', 'Origen', 'Destino', 'Nota'],
                     key=f"editor_{semana}"
                 )
@@ -722,6 +770,13 @@ with tab_inventario:
             cols_mostrar = ['Producto', 'Estado', 'Stock Total', 'Tienda 01 (Gina)', 'Tienda 02 (Celianny)', 'Tienda 03 (San Jose)', 'Alm. Túpac', 'Alm. Collasuyo']
             df_final_mostrar = df_cat_stock[[c for c in cols_mostrar if c in df_cat_stock.columns]]
             
-            st.dataframe(df_final_mostrar, use_container_width=True, hide_index=True)
+            st.dataframe(
+                df_final_mostrar, 
+                use_container_width=False, 
+                hide_index=True,
+                column_config={
+                    "Producto": st.column_config.TextColumn("Producto", width="medium")
+                }
+            )
     else:
         st.info("Aún no hay suficiente información para consolidar el inventario.")
