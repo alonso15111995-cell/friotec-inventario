@@ -287,12 +287,11 @@ tab_productos, tab_tiendas, tab_movimientos, tab_inventario = st.tabs([
 ])
 
 # ==========================================
-# PESTAÑA 1: PRODUCTOS (CON SUB-PESTAÑAS)
+# PESTAÑA 1: PRODUCTOS (CON FILTROS EN EDITAR/ELIMINAR)
 # ==========================================
 with tab_productos:
     categorias_lista = list(df_productos['Categoría'].dropna().unique()) if not df_productos.empty else []
     
-    # Creamos sub-pestañas internas para ordenar la gestión de productos
     sub_tab_lista, sub_tab_add, sub_tab_edit, sub_tab_del = st.tabs([
         "📂 Catálogo y Filtros", "➕ Agregar Producto", "✏️ Editar Producto", "🗑️ Eliminar Producto"
     ])
@@ -345,7 +344,7 @@ with tab_productos:
                 if not n_nombre.strip() or not n_cat_final.strip():
                     st.error("Nombre y Categoría son obligatorios.")
                 elif not df_productos.empty and n_nombre.strip().lower() in df_productos['Nombre del Producto'].str.strip().str.lower().tolist():
-                    st.error(f"⚠️️ Error: El producto '{n_nombre.strip()}' ya existe.")
+                    st.error(f"⚠️ Error: El producto '{n_nombre.strip()}' ya existe.")
                 else:
                     st.info("Subiendo imagen y datos... ⏳")
                     guardar_nuevo_producto(n_nombre, n_cat_final, n_p_uni, n_p_min, n_foto)
@@ -355,52 +354,74 @@ with tab_productos:
 
     with sub_tab_edit:
         st.markdown("### ✏️ Modificar Datos o Cambiar Foto de un Producto")
-        prod_buscar = st.selectbox("Selecciona un producto a modificar:", ["(Elige uno)"] + df_productos['Nombre del Producto'].tolist(), key="sel_editar")
-        if prod_buscar != "(Elige uno)":
-            d_prod = df_productos[df_productos['Nombre del Producto'] == prod_buscar].iloc[0]
-            with st.form("form_editar"):
-                e_nombre = st.text_input("Nombre", value=d_prod['Nombre del Producto'])
-                idx_cat = categorias_lista.index(d_prod['Categoría']) if d_prod['Categoría'] in categorias_lista else 0
-                e_cat_sel = st.selectbox("Categoría", opciones_cat, index=idx_cat, key="cat_edit_sel")
-                e_cat_nueva = st.text_input("Escribe la nueva categoría:") if e_cat_sel == "➕ Crear nueva categoría..." else ""
-                e_cat_final = e_cat_nueva if e_cat_sel == "➕ Crear nueva categoría..." else e_cat_sel
-                
-                ce1, ce2 = st.columns(2)
-                with ce1: e_p_uni = st.number_input("Precio Unitario (S/.)", value=float(d_prod['Precio Unitario'] or 0), min_value=0.0, step=1.0)
-                with ce2: e_p_min = st.number_input("Precio Mínimo (S/.)", value=float(d_prod['Precio Minimo'] or 0), min_value=0.0, step=1.0)
-                
-                tiene_foto = pd.notna(d_prod['Foto']) and str(d_prod['Foto']).startswith("http")
-                if tiene_foto:
-                    st.image(d_prod['Foto'], width=150, caption="Foto actual")
-                
-                eliminar_foto = st.checkbox("🗑️ Eliminar foto actual (dejar sin imagen)")
-                e_foto = st.file_uploader("Tomar o cambiar foto nueva", type=['png', 'jpg', 'jpeg'])
-                
-                if st.form_submit_button("💾 Actualizar Nube"):
-                    st.info("Sincronizando cambios... ⏳")
-                    actualizar_producto(d_prod['ID_Producto'], e_nombre, e_cat_final, e_p_uni, e_p_min, e_foto, d_prod['Foto'], eliminar_foto)
-                    st.success("¡Actualizado con éxito!")
-                    time.sleep(1)
-                    st.rerun()
+        if not df_productos.empty:
+            # 1. Filtro previo por categoría para acotar la lista
+            cat_edit_filtro = st.selectbox("📂 Filtrar por Categoría para editar:", ["TODAS"] + categorias_lista, key="cat_edit_f")
+            df_edit_filtrado = df_productos.copy()
+            if cat_edit_filtro != "TODAS":
+                df_edit_filtrado = df_edit_filtrado[df_edit_filtrado['Categoría'] == cat_edit_filtro]
+            
+            lista_edit_prod = df_edit_filtrado['Nombre del Producto'].tolist()
+            prod_buscar = st.selectbox("Selecciona el producto:", ["(Elige uno)"] + lista_edit_prod, key="sel_editar")
+            
+            if prod_buscar != "(Elige uno)":
+                d_prod = df_productos[df_productos['Nombre del Producto'] == prod_buscar].iloc[0]
+                with st.form("form_editar"):
+                    e_nombre = st.text_input("Nombre", value=d_prod['Nombre del Producto'])
+                    idx_cat = categorias_lista.index(d_prod['Categoría']) if d_prod['Categoría'] in categorias_lista else 0
+                    e_cat_sel = st.selectbox("Categoría", opciones_cat, index=idx_cat, key="cat_edit_sel")
+                    e_cat_nueva = st.text_input("Escribe la nueva categoría:") if e_cat_sel == "➕ Crear nueva categoría..." else ""
+                    e_cat_final = e_cat_nueva if e_cat_sel == "➕ Crear nueva categoría..." else e_cat_sel
+                    
+                    ce1, ce2 = st.columns(2)
+                    with ce1: e_p_uni = st.number_input("Precio Unitario (S/.)", value=float(d_prod['Precio Unitario'] or 0), min_value=0.0, step=1.0)
+                    with ce2: e_p_min = st.number_input("Precio Mínimo (S/.)", value=float(d_prod['Precio Minimo'] or 0), min_value=0.0, step=1.0)
+                    
+                    tiene_foto = pd.notna(d_prod['Foto']) and str(d_prod['Foto']).startswith("http")
+                    if tiene_foto:
+                        st.image(d_prod['Foto'], width=150, caption="Foto actual")
+                    
+                    eliminar_foto = st.checkbox("🗑️ Eliminar foto actual (dejar sin imagen)")
+                    e_foto = st.file_uploader("Tomar o cambiar foto nueva", type=['png', 'jpg', 'jpeg'])
+                    
+                    if st.form_submit_button("💾 Actualizar Nube"):
+                        st.info("Sincronizando cambios... ⏳")
+                        actualizar_producto(d_prod['ID_Producto'], e_nombre, e_cat_final, e_p_uni, e_p_min, e_foto, d_prod['Foto'], eliminar_foto)
+                        st.success("¡Actualizado con éxito!")
+                        time.sleep(1)
+                        st.rerun()
+        else:
+            st.info("Aún no hay productos registrados.")
 
     with sub_tab_del:
         st.markdown("### 🗑️ Eliminar Producto del Sistema")
-        prod_eliminar = st.selectbox("Selecciona el producto que deseas eliminar:", ["(Elige uno)"] + df_productos['Nombre del Producto'].tolist(), key="sel_eliminar")
-        if prod_eliminar != "(Elige uno)":
-            st.warning(f"Vas a eliminar permanentemente **{prod_eliminar}** de todas las ubicaciones.")
-            st.caption("Nota: Se eliminará del catálogo y del stock de las tiendas. El historial de movimientos pasados se conservará.")
-            confirmacion = st.checkbox("Confirmo que deseo eliminar este producto.")
+        if not df_productos.empty:
+            # 1. Filtro previo por categoría para acotar la lista
+            cat_del_filtro = st.selectbox("📂 Filtrar por Categoría para eliminar:", ["TODAS"] + categorias_lista, key="cat_del_f")
+            df_del_filtrado = df_productos.copy()
+            if cat_del_filtro != "TODAS":
+                df_del_filtrado = df_del_filtrado[df_del_filtrado['Categoría'] == cat_del_filtro]
+                
+            lista_del_prod = df_del_filtrado['Nombre del Producto'].tolist()
+            prod_eliminar = st.selectbox("Selecciona el producto que deseas eliminar:", ["(Elige uno)"] + lista_del_prod, key="sel_eliminar")
             
-            if st.button("🚨 Eliminar Definitivamente", type="primary"):
-                if confirmacion:
-                    st.info("Eliminando de la base de datos... ⏳")
-                    exito, msg = eliminar_producto_bd(prod_eliminar)
-                    if exito:
-                        st.success(msg)
-                        time.sleep(1)
-                        st.rerun()
-                else:
-                    st.error("Debes marcar la casilla de confirmación para poder eliminar.")
+            if prod_eliminar != "(Elige uno)":
+                st.warning(f"Vas a eliminar permanentemente **{prod_eliminar}** de todas las ubicaciones.")
+                st.caption("Nota: Se eliminará del catálogo y del stock de las tiendas. El historial de movimientos pasados se conservará.")
+                confirmacion = st.checkbox("Confirmo que deseo eliminar este producto.")
+                
+                if st.button("🚨 Eliminar Definitivamente", type="primary"):
+                    if confirmacion:
+                        st.info("Eliminando de la base de datos... ⏳")
+                        exito, msg = eliminar_producto_bd(prod_eliminar)
+                        if exito:
+                            st.success(msg)
+                            time.sleep(1)
+                            st.rerun()
+                    else:
+                        st.error("Debes marcar la casilla de confirmación para poder eliminar.")
+        else:
+            st.info("Aún no hay productos registrados.")
 
 # ==========================================
 # PESTAÑA 2: TIENDAS Y ALMACENES 
